@@ -9,4 +9,53 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      - './grafana_storage:/var/lib/grafana'
+      - grafana-data:/var/lib/grafana
+
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    container_name: opensearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - plugins.security.disabled=false
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Password_12345678
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - '9200:9200'
+    volumes:
+      - os-data:/usr/share/opensearch/data
+
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.15.0
+    container_name: opensearch-dashboards
+    restart: unless-stopped
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch:9200"]'
+      OPENSEARCH_USERNAME: admin
+      OPENSEARCH_PASSWORD: Password_12345678
+      OPENSEARCH_SSL_VERIFICATION: "false"
+    ports:
+      - "5601:5601"
+
+
+  mqtt:
+    image: eclipse-mosquitto:2-openssl
+    container_name: mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    environment:
+      DEBUG: "true"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+volumes:
+  os-data:
+  grafana-data:
