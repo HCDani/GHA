@@ -9,7 +9,7 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      - './grafana_storage:/var/lib/grafana'
+      - grafana-data:/var/lib/grafana
 
   opensearch:
     image: opensearchproject/opensearch:2.15.0
@@ -58,3 +58,4 @@ services:
 
 volumes:
   os-data:
+  grafana-data:
