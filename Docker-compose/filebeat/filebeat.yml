@@ -1,0 +1,14 @@
+strict.perms: false
+logging.level: info
+logging.to_files: false
+
+filebeat.inputs:
+  - type: log
+    paths:
+      - /usr/share/filebeat/logs/*.ndjson
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+setup.ilm.enabled: false
+setup.template.enabled: false
