@@ -4,11 +4,14 @@ services:
     container_name: grafana
     restart: unless-stopped
     environment:
-      - GF_LOG_LEVEL=debug
+      - GF_LOG_LEVEL=info
     ports:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+    depends_on:
+      opensearch:
+        condition: service_healthy
 
   opensearch:
     image: opensearchproject/opensearch:2.15.0
@@ -77,21 +80,21 @@ services:
         condition: service_healthy
     volumes:
       - ./logstash/pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
 
 
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.15.0
     platform: linux/amd64
     container_name: filebeat
-    user: root
     restart: unless-stopped
     depends_on:
       logstash:
         condition: service_started
     volumes:
-      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./filebeat/logs:/usr/share/filebeat/logs
-      - ./filebeat/data:/usr/share/filebeat/data
+      - /home/hcdani/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /home/hcdani/filebeat/logs:/usr/share/filebeat/logs
+      - /home/hcdani/filebeat/data:/usr/share/filebeat/data
 
 volumes:
   os-data:
