@@ -85,16 +85,15 @@ services:
 
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.15.0
-    platform: linux/amd64
     container_name: filebeat
     restart: unless-stopped
     depends_on:
       logstash:
         condition: service_started
     volumes:
-      - /home/hcdani/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - /home/hcdani/filebeat/logs:/usr/share/filebeat/logs
-      - /home/hcdani/filebeat/data:/usr/share/filebeat/data
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/logs:/usr/share/filebeat/logs
+      - ./filebeat/data:/usr/share/filebeat/data
 
 volumes:
   os-data:
