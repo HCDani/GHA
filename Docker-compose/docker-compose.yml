@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     environment:
       - GF_LOG_LEVEL=info
+      - GF_SERVER_ROOT_URL=https://hga.hock.hu/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     ports:
       - "3000:3000"
     volumes:
@@ -12,6 +14,9 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
+    networks:
+      default:
+        ipv4_address: 172.19.2.3
 
   opensearch:
     image: opensearchproject/opensearch:2.15.0
@@ -36,6 +41,9 @@ services:
       interval: 10s
       timeout: 10s
       retries: 30
+    networks:
+      default:
+        ipv4_address: 172.19.2.4
 
   dashboards:
     image: opensearchproject/opensearch-dashboards:2.15.0
@@ -46,11 +54,17 @@ services:
       OPENSEARCH_USERNAME: admin
       OPENSEARCH_PASSWORD: ${PASSWORD_OPENSEARCH}
       OPENSEARCH_SSL_VERIFICATION: "false"
+      SERVER_BASEPATH: "/opensearch"
+      SERVER_REWRITEBASEPATH: "true"
+      SERVER_PUBLICBASEURL: "https://gha.hock.hu/opensearch"
     ports:
       - "5601:5601"
     depends_on:
       opensearch:
         condition: service_healthy
+    networks:
+      default:
+        ipv4_address: 172.19.2.5
 
 
   mqtt:
@@ -58,13 +72,17 @@ services:
     container_name: mqtt
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      - "1883"
+      - "8883"
     environment:
       DEBUG: "true"
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
+    networks:
+      default:
+        ipv4_address: 172.19.2.6
 
   logstash:
     build: ./logstash
@@ -81,6 +99,9 @@ services:
     volumes:
       - ./logstash/pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
       - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    networks:
+      default:
+        ipv4_address: 172.19.2.7
 
 
   filebeat:
@@ -94,6 +115,14 @@ services:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - ./filebeat/logs:/usr/share/filebeat/logs
       - ./filebeat/data:/usr/share/filebeat/data
+    networks:
+      default:
+        ipv4_address: 172.19.2.8
+        
+networks:
+  default:
+    name: "network-gha_gha"
+    external: true
 
 volumes:
   os-data:

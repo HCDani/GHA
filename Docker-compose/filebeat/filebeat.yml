@@ -6,6 +6,19 @@ filebeat.inputs:
   - type: log
     paths:
       - /usr/share/filebeat/logs/*.ndjson
+  - type: mqqt
+    enabled: true
+    hosts:
+      - "mqtt://mqtt:1883"
+    username: "ghasensor"
+    password: "*****"
+    topics:
+      - "ghanode/sensor"
+    data_format: plain
+    tags: ["mqtt", "ghanode"]
+    fields:
+      app: ghanode_sensor
+    fields_under_root: true
 
 output.logstash:
   hosts: ["logstash:5044"]
