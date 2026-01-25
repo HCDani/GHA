@@ -5,10 +5,24 @@ services:
     restart: unless-stopped
     environment:
       - GF_LOG_LEVEL=info
-      - GF_SERVER_ROOT_URL=https://hga.hock.hu/grafana/
+      - GF_SERVER_ROOT_URL=https://gha.hock.hu/grafana/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN=true
+      - GF_AUTH_GENERIC_OAUTH_ENABLED=true
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=grafana
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${GF_OAUTH_CLIENT_SECRET}
+      - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
+      - GF_AUTH_GENERIC_OAUTH_AUTH_URL=https://gha.hock.hu/keycloak/realms/gha/protocol/openid-connect/auth
+      - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=https://gha.hock.hu/keycloak/realms/gha/protocol/openid-connect/token
+      - GF_AUTH_GENERIC_OAUTH_API_URL=https://gha.hock.hu/keycloak/realms/gha/protocol/openid-connect/userinfo
+      - GF_AUTH_GENERIC_OAUTH_SIGNOUT_REDIRECT_URL=https://gha.hock.hu/keycloak/realms/gha/protocol/openid-connect/logout
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=172.19.2.1:25
+      - GF_SMTP_FROM_ADDRESS=ghagrafana@hock.hu
+      - GF_SMTP_STARTTLS_POLICY=NoStartTLS
     ports:
-      - "3000:3000"
+      - "3000"
     volumes:
       - grafana-data:/var/lib/grafana
     depends_on:
@@ -33,7 +47,7 @@ services:
         soft: -1
         hard: -1
     ports:
-      - "9200:9200"
+      - "9200"
     volumes:
       - os-data:/usr/share/opensearch/data
     healthcheck:
@@ -58,14 +72,13 @@ services:
       SERVER_REWRITEBASEPATH: "true"
       SERVER_PUBLICBASEURL: "https://gha.hock.hu/opensearch"
     ports:
-      - "5601:5601"
+      - "5601"
     depends_on:
       opensearch:
         condition: service_healthy
     networks:
       default:
         ipv4_address: 172.19.2.5
-
 
   mqtt:
     image: eclipse-mosquitto:2-openssl
@@ -92,7 +105,7 @@ services:
       LS_JAVA_OPTS: "-Xms512m -Xmx512m"
       PASSWORD_OPENSEARCH: ${PASSWORD_OPENSEARCH}
     ports:
-      - "5044:5044"
+      - "5044"
     depends_on:
       opensearch:
         condition: service_healthy
@@ -102,7 +115,6 @@ services:
     networks:
       default:
         ipv4_address: 172.19.2.7
-
 
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.15.0
@@ -118,12 +130,55 @@ services:
     networks:
       default:
         ipv4_address: 172.19.2.8
-        
+
+  nginx:
+    image: openresty/openresty:bookworm-fat
+    container_name: nginx
+    depends_on:
+      - grafana
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+    ports:
+      - "80"
+    networks:
+      default:
+        ipv4_address: 172.19.2.9
+
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    restart: unless-stopped
+    volumes:
+      - pb-data:/pb_data
+    ports:
+      - "8090"
+    command: ["serve", "--http=0.0.0.0:8090"]
+    networks:
+      default:
+        ipv4_address: 172.19.2.10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.5.1
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${PASSWORD_OPENSEARCH}
+    command:
+      - start-dev
+      - --http-relative-path=/keycloak
+      - --proxy-headers=xforwarded
+      - --hostname=https://gha.hock.hu/keycloak
+    ports:
+      - "8080"
+    networks:
+      default:
+        ipv4_address: 172.19.2.11
+
 networks:
-  default:
-    name: "network-gha_gha"
-    external: true
+   default:
+     name: "network-gha_gha"
+     external: true
 
 volumes:
   os-data:
   grafana-data:
+  pb-data:
