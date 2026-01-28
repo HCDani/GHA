@@ -69,6 +69,7 @@ services:
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.15.0
     container_name: filebeat
+    user: "0:0"
     restart: unless-stopped
     depends_on:
       logstash:
@@ -86,7 +87,13 @@ services:
     build: ./tests/integration
     container_name: integration-tests
     depends_on:
+      opensearch:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
       logstash:
+        condition: service_started
+      filebeat:
         condition: service_started
     environment:
       IT_MQTT_HOST: mqtt
