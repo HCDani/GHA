@@ -140,7 +140,7 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/html:/usr/share/nginx/html:ro
     ports:
-      - "80"
+      - "80:56340"
     networks:
       default:
         ipv4_address: 172.19.2.9
