@@ -191,7 +191,7 @@ def test_payload_without_temperature():
             "bool": {
                 "must": [
                     {"match_phrase": {"sensor_id": sensor_id}},
-                    {"match_phrase": {"pipeline_error": "missing_temperature"}},
+                    {"match_phrase": {"pipeline_errors": "missing_temperature"}},
                 ]
             }
         },
@@ -221,7 +221,8 @@ def test_payload_without_temperature():
                     pprint(doc)
                     print("===================================================\n")
                     assert doc["sensor_id"] == sensor_id
-                    assert doc["pipeline_error"] == "missing_temperature"
+                    assert "pipeline_errors" in doc
+                    assert "missing_temperature" in doc["pipeline_errors"]
                     assert "message" in doc or "event" in doc
                     return
             except Exception as e:
@@ -269,7 +270,7 @@ def test_payload_without_humidity():
             "bool": {
                 "must": [
                     {"match_phrase": {"sensor_id": sensor_id}},
-                    {"match_phrase": {"pipeline_error": "missing_humidity"}},
+                    {"match_phrase": {"pipeline_errors": "missing_humidity"}},
                 ]
             }
         },
@@ -299,7 +300,8 @@ def test_payload_without_humidity():
                     pprint(doc)
                     print("===================================================\n")
                     assert doc["sensor_id"] == sensor_id
-                    assert doc["pipeline_error"] == "missing_humidity"
+                    assert "pipeline_errors" in doc
+                    assert "missing_humidity" in doc["pipeline_errors"]
                     assert "message" in doc or "event" in doc
                     return
             except Exception as e:
@@ -346,7 +348,7 @@ def test_payload_without_light():
             "bool": {
                 "must": [
                     {"match_phrase": {"sensor_id": sensor_id}},
-                    {"match_phrase": {"pipeline_error": "missing_light"}},
+                    {"match_phrase": {"pipeline_errors": "missing_light"}},
                 ]
             }
         },
@@ -377,7 +379,8 @@ def test_payload_without_light():
                     pprint(doc)
                     print("===================================================\n")
                     assert doc["sensor_id"] == sensor_id
-                    assert doc["pipeline_error"] == "missing_light"
+                    assert "pipeline_errors" in doc
+                    assert "missing_light" in doc["pipeline_errors"]
                     assert "message" in doc or "event" in doc
                     return
             except Exception as e:
@@ -421,7 +424,7 @@ def test_payload_without_sensor_id():
         "query": {
             "bool": {
                 "must": [
-                    {"match_phrase": {"pipeline_error": "missing_sensor_id"}},
+                    {"match_phrase": {"pipeline_errors": "missing_sensor_id"}},
                     {"match_phrase": {"test_case_id": test_case_id}},
                 ]
             }
@@ -448,7 +451,8 @@ def test_payload_without_sensor_id():
                     print("\n===== Error document found in sensors-errors-* =====")
                     pprint(doc)
                     print("===================================================\n")
-                    assert doc["pipeline_error"] == "missing_sensor_id"
+                    assert "pipeline_errors" in doc
+                    assert "missing_sensor_id" in doc["pipeline_errors"]
                     assert doc["test_case_id"] == test_case_id
                     assert "message" in doc or "event" in doc
                     return
@@ -470,3 +474,162 @@ def test_payload_without_sensor_id():
             )
         except Exception:
             pass
+
+
+@pytest.mark.integration
+def test_payload_missing_temperature_humidity_light():
+    mqtt_host = os.getenv("IT_MQTT_HOST", "mqtt")
+    mqtt_port = os.getenv("IT_MQTT_PORT", "1883")
+    mqtt_user = os.getenv("IT_MQTT_USER", "ghasensor")
+    mqtt_pass = os.getenv("IT_MQTT_PASS", "*****")
+    mqtt_topic = os.getenv("IT_MQTT_TOPIC", "ghanode/sensor")
+
+    os_host = os.getenv("IT_OS_HOST", "opensearch")
+    os_port = os.getenv("IT_OS_PORT", "9200")
+    os_user = os.getenv("IT_OS_USER", "admin")
+    os_pass = os.getenv("IT_OS_PASS", os.getenv("PASSWORD_OPENSEARCH", ""))
+
+    sensor_id = f"it-sensors-{uuid.uuid4().hex[:10]}"
+
+    payload_obj = {
+        "Sensor ID": sensor_id
+    }
+
+    client = make_opensearch_client(os_host, os_port, os_user, os_pass)
+
+    normal_query = {"query": {"match_phrase": {"sensor_id": sensor_id}}, "size": 1}
+
+    error_query = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"match_phrase": {"sensor_id": sensor_id}},
+                    {"match_phrase": {"pipeline_errors": "missing_temperature"}},
+                    {"match_phrase": {"pipeline_errors": "missing_humidity"}},
+                    {"match_phrase": {"pipeline_errors": "missing_light"}},
+                ]
+            }
+        },
+        "size": 1,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+    }
+
+    try:
+        print("\n===== MQTT invalid payload sent (missing temp + humidity + light) =====")
+        pprint(payload_obj)
+        print("=======================================================================\n")
+
+        publish_mqtt(mqtt_host, mqtt_port, mqtt_user, mqtt_pass, mqtt_topic, json.dumps(payload_obj))
+
+        assert_not_indexed(client, "it-sensors-*", normal_query, timeout_seconds=25)
+        assert_not_indexed(client, "sensors-*", normal_query, timeout_seconds=25)
+
+        deadline = time.time() + 30
+        last_err = None
+        while time.time() < deadline:
+            try:
+                res = client.search(index="sensors-errors-*", body=error_query)
+                hits = res.get("hits", {}).get("hits", [])
+                if hits:
+                    doc = hits[0]["_source"]
+
+                    print("\n===== Error document found in sensors-errors-* =====")
+                    pprint(doc)
+                    print("===================================================\n")
+
+                    assert doc["sensor_id"] == sensor_id
+
+                    assert "pipeline_errors" in doc
+                    errs = doc["pipeline_errors"]
+                    assert "missing_temperature" in errs
+                    assert "missing_humidity" in errs
+                    assert "missing_light" in errs
+                    return
+            except Exception as e:
+                last_err = e
+
+            time.sleep(2)
+
+        raise AssertionError(
+            f"Expected multi-missing error doc not found. Last error: {last_err}"
+        )
+
+    finally:
+        delete_test_docs_everywhere(client, sensor_id)
+
+
+
+@pytest.mark.integration
+def test_payload_with_invalid_temperature():
+    mqtt_host = os.getenv("IT_MQTT_HOST", "mqtt")
+    mqtt_port = os.getenv("IT_MQTT_PORT", "1883")
+    mqtt_user = os.getenv("IT_MQTT_USER", "ghasensor")
+    mqtt_pass = os.getenv("IT_MQTT_PASS", "*****")
+    mqtt_topic = os.getenv("IT_MQTT_TOPIC", "ghanode/sensor")
+
+    os_host = os.getenv("IT_OS_HOST", "opensearch")
+    os_port = os.getenv("IT_OS_PORT", "9200")
+    os_user = os.getenv("IT_OS_USER", "admin")
+    os_pass = os.getenv("IT_OS_PASS", os.getenv("PASSWORD_OPENSEARCH", ""))
+
+    sensor_id = f"it-sensors-{uuid.uuid4().hex[:10]}"
+
+    payload_obj = {
+        "Sensor ID": sensor_id,
+        "temperature": "NOT_A_NUMBER",
+        "humidity": 45.2,
+        "light": 123.0,
+    }
+
+    client = make_opensearch_client(os_host, os_port, os_user, os_pass)
+
+    normal_query = {"query": {"match_phrase": {"sensor_id": sensor_id}}, "size": 1}
+
+    error_query = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"match_phrase": {"sensor_id": sensor_id}},
+                    {"match_phrase": {"pipeline_errors": "invalid_temperature"}},
+                ]
+            }
+        },
+        "size": 1,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+    }
+
+    try:
+        print("\n===== MQTT invalid payload sent (invalid temperature) =====")
+        pprint(payload_obj)
+        print("===========================================================\n")
+
+        publish_mqtt(mqtt_host, mqtt_port, mqtt_user, mqtt_pass, mqtt_topic, json.dumps(payload_obj))
+
+        assert_not_indexed(client, "it-sensors-*", normal_query, timeout_seconds=25)
+        assert_not_indexed(client, "sensors-*", normal_query, timeout_seconds=25)
+
+        deadline = time.time() + 30
+        last_err = None
+        while time.time() < deadline:
+            try:
+                res = client.search(index="sensors-errors-*", body=error_query)
+                hits = res.get("hits", {}).get("hits", [])
+                if hits:
+                    doc = hits[0]["_source"]
+
+                    print("\n===== Error document found in sensors-errors-* =====")
+                    pprint(doc)
+                    print("===================================================\n")
+
+                    assert doc["sensor_id"] == sensor_id
+                    assert "pipeline_errors" in doc
+                    assert "invalid_temperature" in doc["pipeline_errors"]
+                    return
+            except Exception as e:
+                last_err = e
+            time.sleep(2)
+
+        raise AssertionError(f"Expected invalid_temperature error doc not found. Last error: {last_err}")
+
+    finally:
+        delete_test_docs_everywhere(client, sensor_id)

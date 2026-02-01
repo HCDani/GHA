@@ -11,8 +11,8 @@ jobs:
     timeout-minutes: 20
 
     env:
-      PASSWORD_OPENSEARCH: Password_12345678
-      MQTT_PASS: VeryS3cr3t_P4ssw0rd
+      PASSWORD_OPENSEARCH: ${{ secrets.MQTT_PASS }}
+      MQTT_PASS: ${{ secrets.MQTT_PASS }}
 
     steps:
       - name: Checkout
