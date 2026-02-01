@@ -3,3 +3,7 @@
 **/data
 **/logs
 **/log
+**/build
+**/node_modules
+.DS_Store
+.env.*
