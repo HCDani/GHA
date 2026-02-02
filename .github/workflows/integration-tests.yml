@@ -2,8 +2,11 @@ name: Integration Tests
 
 on:
   push:
-    branches: ["**"]   # any branch for now
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
 
 jobs:
   integration-tests:
