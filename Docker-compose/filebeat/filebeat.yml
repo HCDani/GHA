@@ -6,12 +6,12 @@ filebeat.inputs:
   - type: log
     paths:
       - /usr/share/filebeat/logs/*.ndjson
-  - type: mqqt
+  - type: mqtt
     enabled: true
     hosts:
       - "mqtt://mqtt:1883"
     username: "ghasensor"
-    password: "*****"
+    password: "VeryS3cr3t_P4ssw0rd"
     topics:
       - "ghanode/sensor"
     data_format: plain

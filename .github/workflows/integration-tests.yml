@@ -1,0 +1,64 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PASSWORD_OPENSEARCH: ${{ secrets.MQTT_PASS }}
+      MQTT_PASS: ${{ secrets.MQTT_PASS }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create external docker network used by compose
+        run: |
+          docker network inspect network-gha_gha >/dev/null 2>&1 || \
+          docker network create --subnet 172.19.0.0/16 network-gha_gha
+
+      - name: Build and start stack
+        working-directory: Docker-compose
+        run: |
+          docker compose -f docker-compose-tests.yml up -d --build
+
+      - name: Show running containers
+        run: docker ps -a
+
+      - name: Wait for OpenSearch
+        run: |
+          echo "Waiting for OpenSearch..."
+          for i in {1..60}; do
+            if curl -k -u admin:${PASSWORD_OPENSEARCH} https://localhost:9200 >/dev/null 2>&1; then
+              echo "OpenSearch is responding"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "OpenSearch did not become ready"
+          docker compose -f Docker-compose/docker-compose-tests.yml logs opensearch
+          exit 1
+
+      - name: Run integration tests
+        working-directory: Docker-compose
+        run: |
+          docker compose -f docker-compose-tests.yml run --rm integration-tests
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          docker compose -f Docker-compose/docker-compose-tests.yml logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f Docker-compose/docker-compose-tests.yml down -v

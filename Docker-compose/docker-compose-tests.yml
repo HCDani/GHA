@@ -1,0 +1,121 @@
+services:
+
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    container_name: opensearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - plugins.security.disabled=false
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${PASSWORD_OPENSEARCH}
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+    volumes:
+      - os-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL","curl -k -u admin:${PASSWORD_OPENSEARCH} https://localhost:9200 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    networks:
+      default:
+        ipv4_address: 172.19.2.4
+
+
+  mqtt:
+    image: eclipse-mosquitto:2-openssl
+    container_name: mqtt
+    restart: unless-stopped
+    ports:
+      - "1883"
+      - "8883"
+    environment:
+      DEBUG: "true"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      default:
+        ipv4_address: 172.19.2.6
+
+
+  logstash:
+    build: ./logstash
+    container_name: logstash
+    restart: unless-stopped
+    environment:
+      LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+      PASSWORD_OPENSEARCH: ${PASSWORD_OPENSEARCH}
+    ports:
+      - "5044:5044"
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    volumes:
+      - ./logstash/pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    networks:
+      default:
+        ipv4_address: 172.19.2.7
+
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.0
+    container_name: filebeat
+    user: "0:0"
+    command: ["--strict.perms=false"]
+    restart: unless-stopped
+    depends_on:
+      logstash:
+        condition: service_started
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/logs:/usr/share/filebeat/logs
+      - ./filebeat/data:/usr/share/filebeat/data
+    networks:
+      default:
+        ipv4_address: 172.19.2.8
+
+
+  integration-tests:
+    build: ./tests/integration
+    container_name: integration-tests
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+      logstash:
+        condition: service_started
+      filebeat:
+        condition: service_started
+    environment:
+      IT_MQTT_HOST: mqtt
+      IT_MQTT_PORT: "1883"
+      IT_MQTT_USER: ghasensor
+      IT_MQTT_PASS: ${MQTT_PASS}
+      IT_MQTT_TOPIC: ghanode/sensor
+
+      IT_OS_HOST: opensearch
+      IT_OS_PORT: "9200"
+      IT_OS_USER: admin
+      IT_OS_PASS: ${PASSWORD_OPENSEARCH}
+    volumes:
+    - ./tests/integration/test_mqtt_to_opensearch.py:/tests/test_mqtt_to_opensearch.py:ro
+    networks:
+      default:
+
+networks:
+  default:
+    name: "network-gha_gha"
+    external: true
+
+volumes:
+  os-data:

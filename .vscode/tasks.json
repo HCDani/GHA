@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "E2E: Run integration tests (Docker)",
+      "type": "shell",
+      "command": "docker compose -f Docker-compose/docker-compose-tests.yml run --rm integration-tests pytest -m integration -q -s",
+      "problemMatcher": []
+    }
+  ]
+}
