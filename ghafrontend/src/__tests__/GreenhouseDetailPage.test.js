@@ -1,19 +1,26 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import '@testing-library/jest-dom';
 
 jest.mock('../pbClient', () => {
   const mockGetOne = jest.fn();
+  const mockUpdate = jest.fn();
+  const collectionReturn = {
+    getOne: mockGetOne,
+    update: mockUpdate,
+  };
   return {
     pb: {
-      collection: () => ({ getOne: mockGetOne }),
+      collection: () => collectionReturn,
     },
     __getMockGetOne: () => mockGetOne,
+    __getMockUpdate: () => mockUpdate,
   };
 });
 
-import { __getMockGetOne } from '../pbClient';
+import { __getMockGetOne, __getMockUpdate } from '../pbClient';
 
 jest.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -64,7 +71,7 @@ describe('GreenhouseDetailPage', () => {
   });
 
   test('shows greenhouse title and order when loaded', async () => {
-    mockGetOne.mockResolvedValueOnce({
+    mockGetOne.mockResolvedValue({
       id: 'gh1',
       title: 'My Greenhouse',
       description: 'A test greenhouse',
@@ -82,7 +89,7 @@ describe('GreenhouseDetailPage', () => {
   });
 
   test('shows Back to Greenhouses button', async () => {
-    mockGetOne.mockResolvedValueOnce({
+    mockGetOne.mockResolvedValue({
       id: 'gh1',
       title: 'Test',
       description: '',
@@ -99,7 +106,7 @@ describe('GreenhouseDetailPage', () => {
   });
 
   test('shows Details and Grafana Panels sections', async () => {
-    mockGetOne.mockResolvedValueOnce({
+    mockGetOne.mockResolvedValue({
       id: 'gh1',
       title: 'GH',
       description: '',
@@ -117,7 +124,7 @@ describe('GreenhouseDetailPage', () => {
   });
 
   test('shows no panels message when grafanadata is empty', async () => {
-    mockGetOne.mockResolvedValueOnce({
+    mockGetOne.mockResolvedValue({
       id: 'gh1',
       title: 'Empty',
       description: '',
@@ -162,7 +169,7 @@ describe('GreenhouseDetailPage', () => {
   });
 
   test('calls getOne with id', async () => {
-    mockGetOne.mockResolvedValueOnce({
+    mockGetOne.mockResolvedValue({
       id: 'gh1',
       title: 'GH',
       description: '',
@@ -176,5 +183,26 @@ describe('GreenhouseDetailPage', () => {
     });
 
     expect(mockGetOne).toHaveBeenCalledWith('gh1');
+  });
+
+  test('edit form has Title and Description inputs and Save button', async () => {
+    mockGetOne.mockResolvedValue({
+      id: 'gh1',
+      title: 'Original',
+      description: 'Original desc',
+      order: 0,
+      grafanadata: [],
+    });
+
+    renderDetailPage('gh1');
+    await waitFor(() => expect(screen.getByText('Original')).toBeInTheDocument());
+
+    const editBtn = screen.getByRole('button', { name: 'Edit' });
+    await userEvent.click(editBtn);
+
+    await waitFor(() => expect(screen.getByLabelText(/Title/i)).toBeInTheDocument());
+    expect(screen.getByLabelText(/Title/i)).toHaveValue('Original');
+    expect(screen.getByLabelText(/Description \(max 100 characters\)/i)).toHaveValue('Original desc');
+    expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument();
   });
 });
