@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Modal from 'react-modal';
 import { extractGrafanaUrl, normalizeGrafanaUrl } from './utils/grafanaUrl';
-import './App.css';
+import './styles/App.css';
 
 try {
   Modal.setAppElement('#root');
